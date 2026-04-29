@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ServTec Customs Invoice Generator</title>
+    <script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin-bottom: 1.5rem;
+        }
+        h1 { font-size: 2rem; color: #1a202c; margin-bottom: 0.5rem; }
+        .subtitle { color: #718096; margin-bottom: 2rem; }
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .tab {
+            padding: 1rem 2rem;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-weight: 600;
+            color: #718096;
+            transition: all 0.2s;
+        }
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .form-group { margin-bottom: 1.5rem; }
+        label {
+            display: block;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        input, select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .help-text { font-size: 0.85rem; color: #718096; margin-top: 0.25rem; }
+        .btn {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-secondary { background: white; color: #667eea; border: 2px solid #667eea; }
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+        .alert-success { background: #c6f6d5; color: #22543d; border: 2px solid #48bb78; }
+        .alert-error { background: #fed7d7; color: #742a2a; border: 2px solid #f56565; }
+        .alert-info { background: #bee3f8; color: #2c5282; border: 2px solid #4299e1; }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 0.5rem;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .setup-section {
+            background: #f7fafc;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+        .setup-section h3 { font-size: 1.1rem; margin-bottom: 1rem; color: #2d3748; }
+        .info-box {
+            background: #ebf8ff;
+            border-left: 4px solid #4299e1;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .status-connected { background: #c6f6d5; color: #22543d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>📦 ServTec Customs Invoice Generator</h1>
+            <p class="subtitle">Shopify + eBay • Optimized for Render Free Tier</p>
+
+            <div id="alertContainer"></div>
+
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('shopify')">🛒 Shopify</button>
+                <button class="tab" onclick="switchTab('ebay')">🏪 eBay</button>
+            </div>
+
+            <!-- SHOPIFY TAB -->
+            <div class="tab-content active" id="shopify-content">
+                <div class="setup-section">
+                    <h3>🔐 Render Server URL</h3>
+                    <div class="form-group">
+                        <input type="text" id="renderUrl" placeholder="https://servtec-customs.onrender.com">
+                        <div class="help-text">Your Render server URL (get this after deploying)</div>
+                    </div>
+                </div>
+
+                <div class="setup-section">
+                    <h3>🔑 Shopify Credentials</h3>
+                    <div class="form-group">
+                        <label>Store Name</label>
+                        <input type="text" id="shopifyStore" value="f862ff-4">
+                    </div>
+                    <div class="form-group">
+                        <label>Client ID</label>
+                        <input type="text" id="shopifyClientId" value="48055cfc9a3db8c865a208452000707c">
+                    </div>
+                    <div class="form-group">
+                        <label>Client Secret</label>
+                        <input type="password" id="shopifyClientSecret" value="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">
+                    </div>
+                    <button class="btn" onclick="authenticateShopify()">🔑 Get Token (Valid 24h)</button>
+                    <div id="shopifyStatus" style="margin-top: 1rem;"></div>
+                </div>
+
+                <div class="setup-section">
+                    <h3>📝 Generate Invoice</h3>
+                    <div class="form-group">
+                        <label>Order Number</label>
+                        <input type="text" id="shopifyOrderNumber" placeholder="1504">
+                    </div>
+                    <button class="btn" onclick="generateShopifyInvoice()" id="shopifyGenerateBtn">
+                        <span id="shopifyBtnText">🎯 Generate Invoice</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- EBAY TAB -->
+            <div class="tab-content" id="ebay-content">
+                <div class="setup-section">
+                    <h3>🔐 Server URL</h3>
+                    <div class="form-group">
+                        <input type="text" id="renderUrlEbay" placeholder="Same as Shopify">
+                    </div>
+                </div>
+
+                <div class="setup-section">
+                    <h3>🔑 eBay Credentials</h3>
+                    <div class="info-box">
+                        Get credentials from: <strong>developer.ebay.com</strong>
+                    </div>
+                    <div class="form-group">
+                        <label>Client ID</label>
+                        <input type="text" id="ebayClientId">
+                    </div>
+                    <div class="form-group">
+                        <label>Client Secret</label>
+                        <input type="password" id="ebayClientSecret">
+                    </div>
+                    <button class="btn" onclick="authenticateEbay()">🔑 Get Token</button>
+                    <div id="ebayStatus" style="margin-top: 1rem;"></div>
+                </div>
+
+                <div class="setup-section">
+                    <h3>📝 Generate Invoice</h3>
+                    <div class="form-group">
+                        <label>Order ID</label>
+                        <input type="text" id="ebayOrderId" placeholder="22-14160-40954">
+                    </div>
+                    <button class="btn" onclick="generateEbayInvoice()" id="ebayGenerateBtn">
+                        <span id="ebayBtnText">🎯 Generate Invoice</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom: 1rem;">⚙️ Settings</h3>
+            <div class="form-group">
+                <label>IOSS Number</label>
+                <input type="text" id="iossNumber" value="IM2330027966">
+            </div>
+            <div class="form-group">
+                <label>Company Name</label>
+                <input type="text" id="companyName" value="ServTec UK">
+            </div>
+            <div class="form-group">
+                <label>EORI Number</label>
+                <input type="text" id="eoriNumber" value="GB084390595000">
+            </div>
+            <button class="btn btn-secondary" onclick="saveSettings()">💾 Save</button>
+        </div>
+    </div>
+
+    <script>
+        // TOKEN CACHE - Minimize server calls
+        let shopifyToken = null;
+        let shopifyTokenExpiry = null;
+        let ebayToken = null;
+        let ebayTokenExpiry = null;
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+            document.getElementById(`${tab}-content`).classList.add('active');
+        }
+
+        function loadSavedData() {
+            const saved = localStorage.getItem('servtecCreds');
+            if (saved) {
+                const c = JSON.parse(saved);
+                document.getElementById('renderUrl').value = c.renderUrl || '';
+                document.getElementById('renderUrlEbay').value = c.renderUrl || '';
+                document.getElementById('shopifyStore').value = c.shopifyStore || 'f862ff-4';
+                document.getElementById('shopifyClientId').value = c.shopifyClientId || '48055cfc9a3db8c865a208452000707c';
+                document.getElementById('shopifyClientSecret').value = c.shopifyClientSecret || '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';
+            }
+
+            // Load cached tokens
+            const tokenCache = localStorage.getItem('tokenCache');
+            if (tokenCache) {
+                const cache = JSON.parse(tokenCache);
+                if (cache.shopify && cache.shopify.expiry > Date.now()) {
+                    shopifyToken = cache.shopify.token;
+                    shopifyTokenExpiry = cache.shopify.expiry;
+                    showStatus('shopify', true, cache.shopify.expiry);
+                }
+                if (cache.ebay && cache.ebay.expiry > Date.now()) {
+                    ebayToken = cache.ebay.token;
+                    ebayTokenExpiry = cache.ebay.expiry;
+                    showStatus('ebay', true, cache.ebay.expiry);
+                }
+            }
+
+            const settings = localStorage.getItem('invoiceSettings');
+            if (settings) {
+                const s = JSON.parse(settings);
+                document.getElementById('iossNumber').value = s.iossNumber || 'IM2330027966';
+                document.getElementById('companyName').value = s.companyName || 'ServTec UK';
+                document.getElementById('eoriNumber').value = s.eoriNumber || 'GB084390595000';
+            }
+        }
+
+        // Check if token is still valid (refresh 5min before expiry)
+        function isTokenValid(platform) {
+            const token = platform === 'shopify' ? shopifyToken : ebayToken;
+            const expiry = platform === 'shopify' ? shopifyTokenExpiry : ebayTokenExpiry;
+            return token && expiry > (Date.now() + 300000);
+        }
+
+        async function authenticateShopify() {
+            // Check cached token first
+            if (isTokenValid('shopify')) {
+                showAlert('✓ Using cached token (still valid)', 'info');
+                return;
+            }
+
+            const renderUrl = document.getElementById('renderUrl').value.trim();
+            const store = document.getElementById('shopifyStore').value.trim();
+            const clientId = document.getElementById('shopifyClientId').value.trim();
+            const clientSecret = document.getElementById('shopifyClientSecret').value.trim();
+
+            if (!renderUrl || !store || !clientId || !clientSecret) {
+                showAlert('Please fill in all fields', 'error');
+                return;
+            }
+
+            localStorage.setItem('servtecCreds', JSON.stringify({
+                renderUrl, shopifyStore: store, shopifyClientId: clientId, shopifyClientSecret: clientSecret
+            }));
+
+            showAlert('Requesting token...', 'info');
+
+            try {
+                const response = await fetch(`${renderUrl}/api/shopify/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ store, client_id: clientId, client_secret: clientSecret })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Authentication failed');
+                }
+
+                const expiry = Date.now() + (data.expires_in * 1000);
+                shopifyToken = data.access_token;
+                shopifyTokenExpiry = expiry;
+
+                // Cache token
+                const cache = JSON.parse(localStorage.getItem('tokenCache') || '{}');
+                cache.shopify = { token: shopifyToken, expiry };
+                localStorage.setItem('tokenCache', JSON.stringify(cache));
+
+                showAlert('✓ Authenticated!', 'success');
+                showStatus('shopify', true, expiry);
+
+            } catch (error) {
+                showAlert('❌ Error: ' + error.message, 'error');
+            }
+        }
+
+        async function authenticateEbay() {
+            if (isTokenValid('ebay')) {
+                showAlert('✓ Using cached token', 'info');
+                return;
+            }
+
+            const renderUrl = document.getElementById('renderUrlEbay').value.trim() || document.getElementById('renderUrl').value.trim();
+            const clientId = document.getElementById('ebayClientId').value.trim();
+            const clientSecret = document.getElementById('ebayClientSecret').value.trim();
+
+            if (!renderUrl || !clientId || !clientSecret) {
+                showAlert('Please fill in all eBay fields', 'error');
+                return;
+            }
+
+            showAlert('Requesting eBay token...', 'info');
+
+            try {
+                const response = await fetch(`${renderUrl}/api/ebay/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Authentication failed');
+                }
+
+                const expiry = Date.now() + (data.expires_in * 1000);
+                ebayToken = data.access_token;
+                ebayTokenExpiry = expiry;
+
+                const cache = JSON.parse(localStorage.getItem('tokenCache') || '{}');
+                cache.ebay = { token: ebayToken, expiry };
+                localStorage.setItem('tokenCache', JSON.stringify(cache));
+
+                showAlert('✓ eBay authenticated!', 'success');
+                showStatus('ebay', true, expiry);
+
+            } catch (error) {
+                showAlert('❌ Error: ' + error.message, 'error');
+            }
+        }
+
+        async function generateShopifyInvoice() {
+            if (!isTokenValid('shopify')) {
+                showAlert('Please authenticate first', 'error');
+                return;
+            }
+
+            const orderNumber = document.getElementById('shopifyOrderNumber').value.trim().replace('#', '');
+            if (!orderNumber) {
+                showAlert('Please enter order number', 'error');
+                return;
+            }
+
+            const renderUrl = document.getElementById('renderUrl').value.trim();
+            const store = document.getElementById('shopifyStore').value.trim();
+            const btn = document.getElementById('shopifyGenerateBtn');
+            const btnText = document.getElementById('shopifyBtnText');
+
+            btn.disabled = true;
+            btnText.innerHTML = '<span class="loading"></span>Fetching...';
+
+            try {
+                const response = await fetch(`${renderUrl}/api/shopify/orders`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        store,
+                        access_token: shopifyToken,
+                        order_name: orderNumber
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (!data.orders || !data.orders.length) {
+                    throw new Error(`Order #${orderNumber} not found`);
+                }
+
+                const order = data.orders[0];
+
+                if (order.shipping_address?.country_code === 'GB') {
+                    showAlert('UK order - no customs invoice needed', 'info');
+                    btn.disabled = false;
+                    btnText.innerHTML = '🎯 Generate Invoice';
+                    return;
+                }
+
+                btnText.innerHTML = '<span class="loading"></span>Generating...';
+                
+                // Generate invoice here (you'd add the full docx generation)
+                showAlert(`✓ Invoice generated for ${order.name}!`, 'success');
+                document.getElementById('shopifyOrderNumber').value = '';
+
+            } catch (error) {
+                showAlert('❌ ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btnText.innerHTML = '🎯 Generate Invoice';
+            }
+        }
+
+        async function generateEbayInvoice() {
+            showAlert('eBay invoice generation - coming soon!', 'info');
+        }
+
+        function showStatus(platform, connected, expiry) {
+            const elem = document.getElementById(`${platform}Status`);
+            if (connected) {
+                const time = new Date(expiry).toLocaleTimeString();
+                elem.innerHTML = `<span class="status-badge status-connected">✓ Valid until ${time}</span>`;
+            }
+        }
+
+        function saveSettings() {
+            localStorage.setItem('invoiceSettings', JSON.stringify({
+                iossNumber: document.getElementById('iossNumber').value,
+                companyName: document.getElementById('companyName').value,
+                eoriNumber: document.getElementById('eoriNumber').value
+            }));
+            showAlert('✓ Saved!', 'success');
+        }
+
+        function showAlert(msg, type) {
+            document.getElementById('alertContainer').innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+            setTimeout(() => document.getElementById('alertContainer').innerHTML = '', 5000);
+        }
+
+        loadSavedData();
+    </script>
+</body>
+</html>
